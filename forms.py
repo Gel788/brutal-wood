@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, FloatField, FileField, DateField, IntegerField, SelectField, BooleanField
-from wtforms.validators import DataRequired, Length, NumberRange, Email, ValidationError
+from wtforms.validators import DataRequired, Length, NumberRange, ValidationError
 from flask_wtf.file import FileAllowed, FileRequired
 from datetime import datetime
 from utils import validate_time_slots
@@ -35,8 +35,6 @@ class AdvertisementForm(FlaskForm):
         DataRequired(message='Поле обязательно для заполнения'),
         Length(min=5, max=20, message='Длина телефона должна быть от 5 до 20 символов')
     ])
-    
-    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=100)])
     
     photos = FileField('Фотографии', validators=[
         FileAllowed(['png', 'jpg', 'jpeg', 'gif'], 'Разрешены только изображения форматов PNG, JPG, JPEG, GIF')

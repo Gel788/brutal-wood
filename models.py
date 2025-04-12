@@ -46,6 +46,7 @@ class Advertisement(db.Model):
         return f'<Advertisement {self.title}>'
     
     def to_dict(self):
+        """Преобразует объект в словарь"""
         return {
             'id': self.id,
             'title': self.title,
@@ -55,13 +56,14 @@ class Advertisement(db.Model):
             'manager_name': self.manager_name,
             'phone': self.phone,
             'photos': self.photos,
-            'start_date': self.start_date.isoformat(),
-            'end_date': self.end_date.isoformat(),
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
             'reposts_per_day': self.reposts_per_day,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'category_id': self.category_id
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'category_id': self.category_id,
+            'time_slots': self.time_slots
         }
 
 class User(UserMixin, db.Model):

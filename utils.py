@@ -31,7 +31,18 @@ def save_photo(file):
         if file_size > 5 * 1024 * 1024:  # 5MB max
             raise ValueError('Файл слишком большой')
         
+        # Сохраняем файл
         file.save(filepath)
+        
+        # Оптимизируем изображение
+        try:
+            with Image.open(filepath) as img:
+                if img.size[0] > 1200 or img.size[1] > 1200:
+                    img.thumbnail((1200, 1200))
+                    img.save(filepath, optimize=True, quality=85)
+        except Exception as e:
+            logger.warning(f"Не удалось оптимизировать изображение {filename}: {str(e)}")
+        
         return filename
     except Exception as e:
         logger.error(f"Ошибка при сохранении фотографии: {str(e)}")

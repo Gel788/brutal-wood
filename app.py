@@ -1,19 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
+from datetime import datetime
 import os
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
-from forms import AdvertisementForm
-from utils import save_photos, delete_photos, generate_repost_times, allowed_file, save_photo, delete_photo, init_categories
-from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, FloatField, FileField, DateField, IntegerField, SelectField, BooleanField
-from wtforms.validators import DataRequired, Length, NumberRange, Email, Optional
-from flask_wtf.file import FileAllowed
 import logging
+from dotenv import load_dotenv
 from models import db, Category, Advertisement
+from forms import AdvertisementForm
+from utils import allowed_file, save_photo, delete_photo, init_categories
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -54,7 +49,6 @@ def init_app():
 # Инициализация приложения
 app = init_app()
 
-# Маршруты
 @app.route('/')
 def index():
     try:
@@ -178,32 +172,6 @@ def get_categories():
     except Exception as e:
         logger.error(f"Ошибка при получении категорий: {str(e)}")
         return jsonify([]), 500
-
-class AdvertisementForm(FlaskForm):
-    title = StringField('Название', validators=[DataRequired(), Length(max=100)])
-    description = TextAreaField('Описание', validators=[DataRequired()])
-    price = FloatField('Цена', validators=[DataRequired(), NumberRange(min=0)])
-    address = StringField('Адрес', validators=[DataRequired(), Length(max=200)])
-    manager_name = StringField('Имя менеджера', validators=[DataRequired(), Length(max=100)])
-    phone = StringField('Телефон', validators=[DataRequired(), Length(max=20)])
-    photos = FileField('Фотографии', validators=[FileAllowed(['png', 'jpg', 'jpeg', 'gif'], 'Только изображения!')])
-    start_date = DateField('Дата начала', validators=[DataRequired()])
-    end_date = DateField('Дата окончания', validators=[DataRequired()])
-    reposts_per_day = IntegerField('Количество репостов в день', validators=[NumberRange(min=1, max=10)])
-    category_id = SelectField('Категория', coerce=int, validators=[DataRequired()])
-    time_slots = StringField('Временные слоты', validators=[DataRequired()])
-
-    def validate_end_date(self, field):
-        if field.data < self.start_date.data:
-            raise ValidationError('Дата окончания должна быть позже даты начала')
-
-    def validate_time_slots(self, field):
-        slots = [slot.strip() for slot in field.data.split(',')]
-        for slot in slots:
-            try:
-                datetime.strptime(slot, '%H:%M')
-            except ValueError:
-                raise ValidationError('Неверный формат времени. Используйте формат HH:MM')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

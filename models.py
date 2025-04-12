@@ -2,7 +2,6 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-import json
 
 db = SQLAlchemy()
 
@@ -33,12 +32,10 @@ class Advertisement(db.Model):
     address = db.Column(db.String(200), nullable=False)
     manager_name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
     photos = db.Column(db.JSON, nullable=False, default=list)
     start_date = db.Column(db.DateTime, nullable=False, index=True)
     end_date = db.Column(db.DateTime, nullable=False, index=True)
     reposts_per_day = db.Column(db.Integer, nullable=False, default=1)
-    repost_times = db.Column(db.Text)  # JSON строка с временем репостов
     is_active = db.Column(db.Boolean, default=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -57,12 +54,10 @@ class Advertisement(db.Model):
             'address': self.address,
             'manager_name': self.manager_name,
             'phone': self.phone,
-            'email': self.email,
             'photos': self.photos,
             'start_date': self.start_date.isoformat(),
             'end_date': self.end_date.isoformat(),
             'reposts_per_day': self.reposts_per_day,
-            'repost_times': self.repost_times,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),

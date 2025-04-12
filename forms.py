@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, FloatField, FileField, DateField, IntegerField, SelectField, BooleanField
 from wtforms.validators import DataRequired, Length, NumberRange, Email, ValidationError
-from flask_wtf.file import FileAllowed
+from flask_wtf.file import FileAllowed, FileRequired
 from datetime import datetime
 from utils import validate_time_slots
 

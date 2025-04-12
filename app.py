@@ -69,30 +69,33 @@ class Category(db.Model):
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def init_categories():
+    """Инициализирует предустановленные категории"""
     try:
         categories = [
-            'Недвижимость',
-            'Транспорт',
-            'Работа',
-            'Услуги',
-            'Личные вещи',
-            'Для дома и дачи',
-            'Бытовая техника',
-            'Электроника',
-            'Хобби и отдых',
-            'Животные'
+            {'name': 'Транспорт', 'avito_id': '9'},
+            {'name': 'Недвижимость', 'avito_id': '24'},
+            {'name': 'Электроника', 'avito_id': '81'},
+            {'name': 'Работа', 'avito_id': '111'},
+            {'name': 'Услуги', 'avito_id': '99'}
         ]
         
-        for name in categories:
-            if not Category.query.filter_by(name=name).first():
-                category = Category(name=name)
-                db.session.add(category)
+        # Очищаем существующие категории
+        Category.query.delete()
+        
+        # Добавляем новые категории
+        for category_data in categories:
+            category = Category(
+                name=category_data['name'],
+                avito_id=category_data['avito_id']
+            )
+            db.session.add(category)
         
         db.session.commit()
         logger.info("Категории успешно инициализированы")
     except Exception as e:
         logger.error(f"Ошибка при инициализации категорий: {str(e)}")
         db.session.rollback()
+        raise
 
 # Создаем таблицы и инициализируем категории
 with app.app_context():

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-lg">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Редактирование объявления</h4>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.csrf_token }}
+                        
+                        <div class="mb-4">
+                            <div class="form-floating">
+                                {{ form.title(class="form-control", placeholder="Название") }}
+                                {{ form.title.label(class="form-label") }}
+                            </div>
+                            {% if form.title.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.title.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-floating">
+                                {{ form.description(class="form-control", style="height: 150px", placeholder="Описание") }}
+                                {{ form.description.label(class="form-label") }}
+                            </div>
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.description.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.price(class="form-control", placeholder="Цена") }}
+                                    {{ form.price.label(class="form-label") }}
+                                </div>
+                                {% if form.price.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.price.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.category_id(class="form-select", placeholder="Категория") }}
+                                    {{ form.category_id.label(class="form-label") }}
+                                </div>
+                                {% if form.category_id.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.category_id.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.phone(class="form-control", placeholder="Телефон") }}
+                                    {{ form.phone.label(class="form-label") }}
+                                </div>
+                                {% if form.phone.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.phone.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.address(class="form-control", placeholder="Адрес") }}
+                                    {{ form.address.label(class="form-label") }}
+                                </div>
+                                {% if form.address.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.address.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-floating">
+                                {{ form.time_slots(class="form-control", placeholder="Временные слоты") }}
+                                {{ form.time_slots.label(class="form-label") }}
+                            </div>
+                            <div class="form-text">Укажите временные слоты в формате: 09:00-12:00, 14:00-18:00</div>
+                            {% if form.time_slots.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.time_slots.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Фотографии</label>
+                            <div class="row">
+                                {% for photo in ad.photos %}
+                                    <div class="col-md-3 mb-3">
+                                        <div class="card">
+                                            <img src="{{ url_for('static', filename=photo) }}" class="card-img-top" alt="Фото">
+                                            <div class="card-body p-2">
+                                                <button type="button" class="btn btn-danger btn-sm w-100" 
+                                                        onclick="deletePhoto('{{ photo }}')">
+                                                    Удалить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {{ form.photos(class="form-control") }}
+                            {% if form.photos.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.photos.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">Сохранить изменения</button>
+                            <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg">Отмена</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deletePhoto(photoPath) {
+    if (confirm('Вы уверены, что хотите удалить эту фотографию?')) {
+        fetch(`/delete_photo/${encodeURIComponent(photoPath)}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Ошибка при удалении фотографии');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при удалении фотографии');
+        });
+    }
+}
+</script>
+{% endblock %} 

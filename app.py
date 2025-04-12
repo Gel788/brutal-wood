@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from models import db, Category, Advertisement
 from forms import AdvertisementForm
 from utils import allowed_file, save_photo, delete_photo, init_categories
+from flask_login import login_required, current_user
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -101,58 +102,43 @@ def add_advertisement():
             flash('Произошла ошибка при добавлении объявления', 'danger')
     return render_template('create_advertisement.html', form=form)
 
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit_advertisement(id):
-    ad = Advertisement.query.get_or_404(id)
-    form = AdvertisementForm(obj=ad)
+@app.route('/edit/<int:ad_id>', methods=['GET', 'POST'])
+@login_required
+def edit_advertisement(ad_id):
+    ad = Advertisement.query.get_or_404(ad_id)
+    if ad.user_id != current_user.id:
+        flash('У вас нет прав для редактирования этого объявления', 'danger')
+        return redirect(url_for('index'))
     
+    form = AdvertisementForm(obj=ad)
     if form.validate_on_submit():
         try:
-            # Проверяем существование категории
-            category = Category.query.get(form.category_id.data)
-            if not category:
-                flash('Выбранная категория не существует', 'danger')
-                return render_template('create_advertisement.html', form=form, ad=ad)
-
-            # Обновляем основные данные
+            # Обновляем основные поля
             ad.title = form.title.data
             ad.description = form.description.data
             ad.price = form.price.data
-            ad.address = form.address.data
-            ad.manager_name = form.manager_name.data
-            ad.phone = form.phone.data
-            ad.start_date = form.start_date.data
-            ad.end_date = form.end_date.data
-            ad.reposts_per_day = form.reposts_per_day.data
             ad.category_id = form.category_id.data
+            ad.phone = form.phone.data
+            ad.address = form.address.data
             ad.time_slots = form.time_slots.data
             
-            # Обработка новых фотографий
-            new_photos = []
-            for file in request.files.getlist('photos'):
-                if file and allowed_file(file.filename):
-                    filename = save_photo(file)
-                    new_photos.append(filename)
-            
-            # Обновляем список фотографий только если есть новые
-            if new_photos:
-                # Удаляем старые фотографии
-                for photo in ad.photos:
-                    try:
-                        delete_photo(photo)
-                    except Exception as e:
-                        logger.warning(f"Не удалось удалить старую фотографию {photo}: {str(e)}")
-                ad.photos = new_photos
+            # Обработка фотографий
+            if form.photos.data:
+                for photo in form.photos.data:
+                    if photo:
+                        photo_path = save_photo(photo)
+                        if photo_path:
+                            ad.photos.append(photo_path)
             
             db.session.commit()
-            flash('Объявление успешно обновлено!', 'success')
+            flash('Объявление успешно обновлено', 'success')
             return redirect(url_for('index'))
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Ошибка при обновлении объявления: {str(e)}")
-            flash('Произошла ошибка при обновлении объявления', 'danger')
+            flash(f'Ошибка при обновлении объявления: {str(e)}', 'danger')
+            app.logger.error(f'Ошибка при обновлении объявления: {str(e)}')
     
-    return render_template('create_advertisement.html', form=form, ad=ad)
+    return render_template('edit_advertisement.html', form=form, ad=ad)
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_advertisement(id):
@@ -222,6 +208,28 @@ def uploaded_file(filename):
     except Exception as e:
         logger.error(f"Ошибка при загрузке файла {filename}: {str(e)}")
         return '', 404
+
+@app.route('/delete_photo/<path:photo_path>', methods=['POST'])
+@login_required
+def delete_photo(photo_path):
+    try:
+        # Проверяем, что фотография принадлежит объявлению текущего пользователя
+        ad = Advertisement.query.filter(Advertisement.photos.contains([photo_path])).first()
+        if not ad or ad.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Нет прав на удаление фотографии'}), 403
+        
+        # Удаляем фотографию
+        delete_photo(photo_path)
+        
+        # Обновляем список фотографий в объявлении
+        ad.photos.remove(photo_path)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f'Ошибка при удалении фотографии: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

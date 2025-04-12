@@ -6,40 +6,41 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 class Category(db.Model):
-    __tablename__ = 'categories'
+    __tablename__ = 'category'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    avito_id = db.Column(db.String(50), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    avito_id = db.Column(db.String(50))
+    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     
+    # Связи
+    parent = db.relationship('Category', remote_side=[id], backref='children')
+    advertisements = db.relationship('Advertisement', backref='category', lazy=True)
+
     def __repr__(self):
         return f'<Category {self.name}>'
 
 class Advertisement(db.Model):
-    __tablename__ = 'advertisements'
+    __tablename__ = 'advertisement'
     
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     price = db.Column(db.Float, nullable=False)
     address = db.Column(db.String(200), nullable=False)
     manager_name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
-    photos = db.Column(db.String(500))  # Пути к фотографиям через запятую
-    start_date = db.Column(db.Date, nullable=False)
-    end_date = db.Column(db.Date, nullable=False)
-    reposts_per_day = db.Column(db.Integer, nullable=False, default=1)
+    email = db.Column(db.String(100), nullable=False)
+    photos = db.Column(db.Text)  # JSON строка с путями к фото
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=False)
+    reposts_per_day = db.Column(db.Integer, default=1)
+    repost_times = db.Column(db.Text)  # JSON строка с временем репостов
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Связь с категорией
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-    category = db.relationship('Category', backref=db.backref('advertisements', lazy=True))
-    
-    # Временные слоты для публикации
-    time_slots = db.Column(db.String(500))  # Временные слоты через запятую
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
+    time_slots = db.Column(db.Text)  # JSON строка с временными слотами
     
     def __repr__(self):
         return f'<Advertisement {self.title}>'

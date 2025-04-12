@@ -16,6 +16,7 @@ import logging
 from init_db import init_database
 import json
 import random
+from models import Category, Advertisement
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -35,73 +36,6 @@ csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# Модели
-class Category(db.Model):
-    __tablename__ = 'category'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    avito_id = db.Column(db.String(50))
-    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'))
-    
-    # Связи
-    parent = db.relationship('Category', remote_side=[id], backref='children')
-    advertisements = db.relationship('Advertisement', backref='category', lazy=True)
-
-class Advertisement(db.Model):
-    __tablename__ = 'advertisement'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-    price = db.Column(db.Float, nullable=False)
-    address = db.Column(db.String(200), nullable=False)
-    manager_name = db.Column(db.String(100), nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
-    photos = db.Column(db.Text)  # JSON строка с путями к фото
-    start_date = db.Column(db.DateTime, nullable=False)
-    end_date = db.Column(db.DateTime, nullable=False)
-    reposts_per_day = db.Column(db.Integer, default=1)
-    repost_times = db.Column(db.Text)  # JSON строка с временем репостов
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
-    time_slots = db.Column(db.Text)  # JSON строка с временными слотами
-
-# Создаем директорию для загрузок
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-def init_categories():
-    """Инициализирует предустановленные категории"""
-    try:
-        categories = [
-            {'name': 'Транспорт', 'avito_id': '9'},
-            {'name': 'Недвижимость', 'avito_id': '24'},
-            {'name': 'Электроника', 'avito_id': '81'},
-            {'name': 'Работа', 'avito_id': '111'},
-            {'name': 'Услуги', 'avito_id': '99'}
-        ]
-        
-        # Очищаем существующие категории
-        Category.query.delete()
-        
-        # Добавляем новые категории
-        for category_data in categories:
-            category = Category(
-                name=category_data['name'],
-                avito_id=category_data['avito_id']
-            )
-            db.session.add(category)
-        
-        db.session.commit()
-        logger.info("Категории успешно инициализированы")
-    except Exception as e:
-        logger.error(f"Ошибка при инициализации категорий: {str(e)}")
-        db.session.rollback()
-        raise
-
 # Создаем таблицы и инициализируем категории
 with app.app_context():
     init_database(drop_existing=False)  # Создаем таблицы без удаления существующих
@@ -109,13 +43,7 @@ with app.app_context():
 # Маршруты
 @app.route('/')
 def index():
-    print("="*50)
-    print("Запрос к главной странице")
     ads = Advertisement.query.filter_by(is_active=True).all()
-    print("Найдено объявлений:", len(ads))
-    for ad in ads:
-        print(f"Объявление: {ad.title}, ID: {ad.id}, Активно: {ad.is_active}")
-    print("="*50)
     return render_template('index.html', ads=ads)
 
 @app.route('/add_ad', methods=['GET', 'POST'])
@@ -129,14 +57,7 @@ def add_ad():
             # Обработка загрузки фотографий
             photo_paths = []
             if form.photos.data:
-                for photo in form.photos.data:
-                    if photo and allowed_file(photo.filename):
-                        filename = secure_filename(photo.filename)
-                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                        filename = f"{timestamp}_{filename}"
-                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                        photo.save(filepath)
-                        photo_paths.append(filename)
+                photo_paths = save_photos(form.photos.data)
             
             # Создание нового объявления
             ad = Advertisement(
@@ -147,7 +68,7 @@ def add_ad():
                 manager_name=form.manager_name.data,
                 phone=form.phone.data,
                 email=form.email.data,
-                photos=json.dumps(photo_paths),
+                photos=photo_paths,
                 start_date=form.start_date.data,
                 end_date=form.end_date.data,
                 reposts_per_day=form.reposts_per_day.data,
@@ -247,6 +168,7 @@ def toggle_ad(id):
         flash(f'Объявление успешно {status}', 'success')
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Ошибка при изменении статуса объявления: {str(e)}")
         flash(f'Ошибка при изменении статуса объявления: {str(e)}', 'danger')
     
     return redirect(url_for('index'))

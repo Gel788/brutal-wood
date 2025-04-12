@@ -1,14 +1,16 @@
 import os
 import json
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 from PIL import Image
 from flask import current_app
+from app import app, logger
 
 def allowed_file(filename):
     """Проверяет, что файл имеет допустимое расширение"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def save_photos(files):
     """Сохраняет загруженные фотографии и возвращает список путей к ним"""
@@ -24,7 +26,7 @@ def save_photos(files):
             unique_filename = f"{timestamp}_{filename}"
             
             # Сохраняем файл
-            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
             file.save(filepath)
             
             # Проверяем и оптимизируем изображение
@@ -35,42 +37,44 @@ def save_photos(files):
                         img.thumbnail((1200, 1200))
                         img.save(filepath, optimize=True, quality=85)
             except Exception as e:
-                current_app.logger.error(f"Ошибка при обработке изображения {filepath}: {str(e)}")
+                logger.error(f"Ошибка при обработке изображения {filepath}: {str(e)}")
             
             saved_paths.append(unique_filename)
     
     return json.dumps(saved_paths) if saved_paths else None
 
-def delete_photos(photo_paths):
-    """Удаляет фотографии по списку путей"""
-    if not photo_paths:
+def delete_photos(photos_json):
+    """Удаляет фотографии из файловой системы"""
+    if not photos_json:
         return
-    
     try:
-        paths = json.loads(photo_paths)
-        for path in paths:
-            filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], path)
+        photos = json.loads(photos_json)
+        for photo in photos:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo)
             if os.path.exists(filepath):
                 os.remove(filepath)
     except Exception as e:
-        current_app.logger.error(f"Ошибка при удалении фотографий: {str(e)}")
+        logger.error(f"Ошибка при удалении фотографий: {str(e)}")
 
 def generate_repost_times(reposts_per_day, start_date, end_date):
-    """Генерирует расписание репостов"""
-    if not reposts_per_day or not start_date or not end_date:
-        return None
-    
-    # Преобразуем даты в datetime объекты
-    start = datetime.strptime(start_date, '%Y-%m-%dT%H:%M')
-    end = datetime.strptime(end_date, '%Y-%m-%dT%H:%M')
-    
-    # Генерируем времена репостов
-    times = []
-    if reposts_per_day == 1:
-        times = ['10:00']
-    elif reposts_per_day == 2:
-        times = ['10:00', '15:00']
-    else:  # 3 раза
-        times = ['10:00', '14:00', '18:00']
-    
-    return json.dumps(times) 
+    """Генерирует времена для репостов"""
+    try:
+        start = datetime.strptime(start_date, '%Y-%m-%dT%H:%M')
+        end = datetime.strptime(end_date, '%Y-%m-%dT%H:%M')
+        total_days = (end - start).days + 1
+        total_reposts = reposts_per_day * total_days
+        
+        # Генерируем случайные времена в течение дня
+        times = []
+        for _ in range(total_reposts):
+            random_time = start + timedelta(
+                days=random.randint(0, total_days-1),
+                hours=random.randint(9, 20),
+                minutes=random.randint(0, 59)
+            )
+            times.append(random_time.strftime('%Y-%m-%dT%H:%M'))
+        
+        return json.dumps(sorted(times))
+    except Exception as e:
+        logger.error(f"Ошибка при генерации времен репостов: {str(e)}")
+        return json.dumps([]) 

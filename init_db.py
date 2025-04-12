@@ -29,11 +29,14 @@ def init_categories():
         print("Категории успешно инициализированы")
 
 def init_database():
-    with app.app_context():
-        db.drop_all()  # Удаляем все таблицы
-        db.create_all()  # Создаем таблицы заново
-        init_categories()  # Инициализируем категории
-        print("База данных успешно инициализирована!")
+    try:
+        with app.app_context():
+            db.drop_all()  # Удаляем все таблицы
+            db.create_all()  # Создаем таблицы заново
+            init_categories()  # Инициализируем категории
+            print("База данных успешно инициализирована!")
+    except Exception as e:
+        print(f"Ошибка при инициализации базы данных: {str(e)}")
 
 if __name__ == '__main__':
     init_database() 

@@ -1,29 +1,36 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.utils import secure_filename
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from forms import AdvertisementForm
 from utils import save_photos, delete_photos, generate_repost_times
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, FloatField, FileField, DateField, IntegerField, SelectField, BooleanField
-from wtforms.validators import DataRequired, Length, NumberRange
+from wtforms.validators import DataRequired, Length, NumberRange, Email, Optional
 from flask_wtf.file import FileAllowed
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///ads.db')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///advertisements.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'jpg', 'jpeg', 'png'}
 
 csrf = CSRFProtect(app)
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # Модели
 class Ad(db.Model):
@@ -62,29 +69,39 @@ class Category(db.Model):
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def init_categories():
-    categories = [
-        {'name': 'Транспорт', 'avito_id': '9'},
-        {'name': 'Недвижимость', 'avito_id': '24'},
-        {'name': 'Работа', 'avito_id': '111'},
-        {'name': 'Услуги', 'avito_id': '85'},
-        {'name': 'Личные вещи', 'avito_id': '23'},
-        {'name': 'Для дома и дачи', 'avito_id': '21'},
-        {'name': 'Бытовая электроника', 'avito_id': '22'},
-        {'name': 'Хобби и отдых', 'avito_id': '25'},
-        {'name': 'Животные', 'avito_id': '89'},
-        {'name': 'Для бизнеса', 'avito_id': '84'}
-    ]
-    
-    for cat_data in categories:
-        category = Category.query.filter_by(name=cat_data['name']).first()
-        if not category:
-            category = Category(
-                name=cat_data['name'],
-                avito_id=cat_data['avito_id']
-            )
-            db.session.add(category)
-    
-    db.session.commit()
+    try:
+        categories = [
+            'Недвижимость',
+            'Транспорт',
+            'Работа',
+            'Услуги',
+            'Личные вещи',
+            'Для дома и дачи',
+            'Бытовая техника',
+            'Электроника',
+            'Хобби и отдых',
+            'Животные'
+        ]
+        
+        for name in categories:
+            if not Category.query.filter_by(name=name).first():
+                category = Category(name=name)
+                db.session.add(category)
+        
+        db.session.commit()
+        logger.info("Категории успешно инициализированы")
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации категорий: {str(e)}")
+        db.session.rollback()
+
+# Создаем контекст приложения для инициализации базы данных
+with app.app_context():
+    try:
+        db.create_all()
+        init_categories()
+        logger.info("База данных успешно инициализирована")
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
 
 # Маршруты
 @app.route('/')
@@ -262,7 +279,5 @@ class AdvertisementForm(FlaskForm):
     is_active = BooleanField('Активно', default=True)
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        init_categories()
-    app.run(debug=True) 
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False) 

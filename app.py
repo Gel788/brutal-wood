@@ -14,6 +14,8 @@ from wtforms.validators import DataRequired, Length, NumberRange, Email, Optiona
 from flask_wtf.file import FileAllowed
 import logging
 from init_db import init_database
+import json
+import random
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -122,29 +124,19 @@ def add_ad():
     categories = Category.query.all()
     form.category_id.choices = [(c.id, c.name) for c in categories]
     
-    if request.method == 'POST':
-        print("="*50)
-        print("POST запрос получен")
-        print("Данные формы:", form.data)
-        print("Ошибки формы:", form.errors)
-        print("Файлы:", request.files)
-        print("="*50)
-    
     if form.validate_on_submit():
         try:
-            print("Форма валидна")
             # Обработка загрузки фотографий
             photo_paths = []
             if form.photos.data:
                 for photo in form.photos.data:
-                    if photo:
-                        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{photo.filename}"
-                        photo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    if photo and allowed_file(photo.filename):
+                        filename = secure_filename(photo.filename)
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        filename = f"{timestamp}_{filename}"
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                        photo.save(filepath)
                         photo_paths.append(filename)
-            
-            # Обработка временных слотов
-            time_slots = [slot.strip() for slot in form.time_slots.data.split(',')]
-            time_slots = [f"{slot}:00" if len(slot) == 5 else slot for slot in time_slots]  # Добавляем секунды если их нет
             
             # Создание нового объявления
             ad = Advertisement(
@@ -155,7 +147,7 @@ def add_ad():
                 manager_name=form.manager_name.data,
                 phone=form.phone.data,
                 email=form.email.data,
-                photos=','.join(photo_paths),
+                photos=json.dumps(photo_paths),
                 start_date=form.start_date.data,
                 end_date=form.end_date.data,
                 reposts_per_day=form.reposts_per_day.data,
@@ -165,19 +157,18 @@ def add_ad():
                     form.end_date.data.strftime('%Y-%m-%dT%H:%M')
                 ),
                 category_id=form.category_id.data,
-                time_slots=','.join(time_slots),
+                time_slots=form.time_slots.data,
                 is_active=True
             )
             
             db.session.add(ad)
             db.session.commit()
-            print("Объявление успешно добавлено в базу данных")
             flash('Объявление успешно добавлено', 'success')
             return redirect(url_for('index'))
             
         except Exception as e:
             db.session.rollback()
-            print("Ошибка при добавлении объявления:", str(e))
+            logger.error(f"Ошибка при добавлении объявления: {str(e)}")
             flash(f'Ошибка при добавлении объявления: {str(e)}', 'danger')
     
     return render_template('create_advertisement.html', form=form, categories=categories)
@@ -189,7 +180,7 @@ def edit_ad(id):
     categories = Category.query.all()
     form.category_id.choices = [(c.id, c.name) for c in categories]
     
-    if request.method == 'POST' and form.validate():
+    if form.validate_on_submit():
         try:
             # Обновляем данные объявления
             ad.title = form.title.data
@@ -224,9 +215,10 @@ def edit_ad(id):
             
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Ошибка при обновлении объявления: {str(e)}")
             flash(f'Ошибка при обновлении объявления: {str(e)}', 'danger')
     
-    return render_template('add_ad.html', form=form, ad=ad, categories=categories)
+    return render_template('create_advertisement.html', form=form, ad=ad, categories=categories)
 
 @app.route('/delete_ad/<int:id>', methods=['POST'])
 def delete_ad(id):
@@ -240,6 +232,7 @@ def delete_ad(id):
         flash('Объявление успешно удалено', 'success')
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Ошибка при удалении объявления: {str(e)}")
         flash(f'Ошибка при удалении объявления: {str(e)}', 'danger')
     
     return redirect(url_for('index'))
@@ -290,6 +283,58 @@ class AdvertisementForm(FlaskForm):
                 datetime.strptime(slot, '%H:%M')
             except ValueError:
                 raise ValidationError('Неверный формат времени. Используйте формат HH:MM')
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def save_photos(files):
+    """Сохраняет загруженные фотографии и возвращает список путей"""
+    photo_paths = []
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{timestamp}_{filename}"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            photo_paths.append(filename)
+    return json.dumps(photo_paths)
+
+def delete_photos(photos_json):
+    """Удаляет фотографии из файловой системы"""
+    if not photos_json:
+        return
+    try:
+        photos = json.loads(photos_json)
+        for photo in photos:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], photo)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+    except Exception as e:
+        logger.error(f"Ошибка при удалении фотографий: {str(e)}")
+
+def generate_repost_times(reposts_per_day, start_date, end_date):
+    """Генерирует времена для репостов"""
+    try:
+        start = datetime.strptime(start_date, '%Y-%m-%dT%H:%M')
+        end = datetime.strptime(end_date, '%Y-%m-%dT%H:%M')
+        total_days = (end - start).days + 1
+        total_reposts = reposts_per_day * total_days
+        
+        # Генерируем случайные времена в течение дня
+        times = []
+        for _ in range(total_reposts):
+            random_time = start + timedelta(
+                days=random.randint(0, total_days-1),
+                hours=random.randint(9, 20),
+                minutes=random.randint(0, 59)
+            )
+            times.append(random_time.strftime('%Y-%m-%dT%H:%M'))
+        
+        return json.dumps(sorted(times))
+    except Exception as e:
+        logger.error(f"Ошибка при генерации времен репостов: {str(e)}")
+        return json.dumps([])
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

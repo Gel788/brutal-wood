@@ -37,6 +37,7 @@ class AdvertisementForm(FlaskForm):
     ])
     
     photos = FileField('Фотографии', validators=[
+        FileRequired(message='Необходимо загрузить хотя бы одну фотографию'),
         FileAllowed(['png', 'jpg', 'jpeg', 'gif'], 'Разрешены только изображения форматов PNG, JPG, JPEG, GIF')
     ])
     
@@ -72,7 +73,11 @@ class AdvertisementForm(FlaskForm):
             raise ValidationError('Неверный формат времени. Используйте формат HH:MM, разделяя значения запятыми')
     
     def validate_photos(self, field):
-        if field.data:
-            for file in field.data:
-                if file and not file.filename:
-                    raise ValidationError('Ошибка загрузки файла') 
+        if not field.data:
+            raise ValidationError('Необходимо загрузить хотя бы одну фотографию')
+        
+        for file in field.data:
+            if not file or not file.filename:
+                raise ValidationError('Ошибка загрузки файла')
+            if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                raise ValidationError('Разрешены только изображения форматов PNG, JPG, JPEG, GIF') 

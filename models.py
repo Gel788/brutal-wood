@@ -2,6 +2,7 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from utils import save_photos, delete_photos
 
 db = SQLAlchemy()
 
@@ -44,6 +45,18 @@ class Advertisement(db.Model):
     
     def __repr__(self):
         return f'<Advertisement {self.title}>'
+    
+    def save_photos(self, files):
+        """Сохраняет фотографии и обновляет список"""
+        if not files:
+            return
+        
+        # Удаляем старые фотографии
+        if self.photos:
+            delete_photos(self.photos)
+        
+        # Сохраняем новые фотографии
+        self.photos = save_photos(files)
     
     def to_dict(self):
         """Преобразует объект в словарь"""

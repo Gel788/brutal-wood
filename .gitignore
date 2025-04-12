@@ -30,15 +30,22 @@ ENV/
 *.swp
 *.swo
 
-# Database
-*.db
-*.sqlite3
-
 # Environment variables
 .env
 
+# Uploads
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+
 # Logs
 *.log
+
+# Database
+*.db
+*.sqlite3
 
 # OS
 .DS_Store

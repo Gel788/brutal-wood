@@ -34,8 +34,20 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 # Модели
-class Ad(db.Model):
-    __tablename__ = 'ad'
+class Category(db.Model):
+    __tablename__ = 'category'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    avito_id = db.Column(db.String(50))
+    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'))
+    
+    # Связи
+    parent = db.relationship('Category', remote_side=[id], backref='children')
+    advertisements = db.relationship('Advertisement', backref='category', lazy=True)
+
+class Advertisement(db.Model):
+    __tablename__ = 'advertisement'
     
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -55,16 +67,6 @@ class Ad(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     time_slots = db.Column(db.Text)  # JSON строка с временными слотами
-    
-    category = db.relationship('Category', backref=db.backref('ads', lazy=True))
-
-class Category(db.Model):
-    __tablename__ = 'category'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    avito_id = db.Column(db.String(50))
-    parent_id = db.Column(db.Integer, db.ForeignKey('category.id'))
 
 # Создаем директорию для загрузок
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -107,7 +109,7 @@ with app.app_context():
 def index():
     print("="*50)
     print("Запрос к главной странице")
-    ads = Ad.query.filter_by(is_active=True).all()
+    ads = Advertisement.query.filter_by(is_active=True).all()
     print("Найдено объявлений:", len(ads))
     for ad in ads:
         print(f"Объявление: {ad.title}, ID: {ad.id}, Активно: {ad.is_active}")
@@ -145,7 +147,7 @@ def add_ad():
             time_slots = [f"{slot}:00" if len(slot) == 5 else slot for slot in time_slots]  # Добавляем секунды если их нет
             
             # Создание нового объявления
-            ad = Ad(
+            ad = Advertisement(
                 title=form.title.data,
                 description=form.description.data,
                 price=form.price.data,
@@ -182,7 +184,7 @@ def add_ad():
 
 @app.route('/edit_ad/<int:id>', methods=['GET', 'POST'])
 def edit_ad(id):
-    ad = Ad.query.get_or_404(id)
+    ad = Advertisement.query.get_or_404(id)
     form = AdvertisementForm(obj=ad)
     categories = Category.query.all()
     form.category_id.choices = [(c.id, c.name) for c in categories]
@@ -228,7 +230,7 @@ def edit_ad(id):
 
 @app.route('/delete_ad/<int:id>', methods=['POST'])
 def delete_ad(id):
-    ad = Ad.query.get_or_404(id)
+    ad = Advertisement.query.get_or_404(id)
     try:
         # Удаляем фотографии
         delete_photos(ad.photos)
@@ -244,7 +246,7 @@ def delete_ad(id):
 
 @app.route('/toggle_ad/<int:id>', methods=['POST'])
 def toggle_ad(id):
-    ad = Ad.query.get_or_404(id)
+    ad = Advertisement.query.get_or_404(id)
     try:
         ad.is_active = not ad.is_active
         db.session.commit()
@@ -268,7 +270,7 @@ class AdvertisementForm(FlaskForm):
     address = StringField('Адрес', validators=[DataRequired(), Length(max=200)])
     manager_name = StringField('Имя менеджера', validators=[DataRequired(), Length(max=100)])
     phone = StringField('Телефон', validators=[DataRequired(), Length(max=20)])
-    email = StringField('Email', validators=[DataRequired(), Length(max=100)])
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=100)])
     photos = FileField('Фотографии', validators=[FileAllowed(['jpg', 'png', 'jpeg'], 'Только изображения!')])
     start_date = DateField('Дата начала', validators=[DataRequired()])
     end_date = DateField('Дата окончания', validators=[DataRequired()])
@@ -276,6 +278,18 @@ class AdvertisementForm(FlaskForm):
     category_id = SelectField('Категория', coerce=int, validators=[DataRequired()])
     time_slots = StringField('Временные слоты', validators=[DataRequired()])
     is_active = BooleanField('Активно', default=True)
+
+    def validate_end_date(self, field):
+        if field.data < self.start_date.data:
+            raise ValidationError('Дата окончания должна быть позже даты начала')
+
+    def validate_time_slots(self, field):
+        slots = [slot.strip() for slot in field.data.split(',')]
+        for slot in slots:
+            try:
+                datetime.strptime(slot, '%H:%M')
+            except ValueError:
+                raise ValidationError('Неверный формат времени. Используйте формат HH:MM')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

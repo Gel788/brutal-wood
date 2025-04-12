@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Добавить объявление{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h1 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>
+            Добавить объявление
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    {{ form.csrf_token }}
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">
+                            <i class="bi bi-card-heading me-1"></i>
+                            Заголовок
+                        </label>
+                        {{ form.title(class="form-control", required=True) }}
+                        <div class="invalid-feedback">Пожалуйста, введите заголовок</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i class="bi bi-text-paragraph me-1"></i>
+                            Описание
+                        </label>
+                        {{ form.description(class="form-control", rows=5, required=True) }}
+                        <div class="invalid-feedback">Пожалуйста, введите описание</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="price" class="form-label">
+                            <i class="bi bi-tag me-1"></i>
+                            Цена
+                        </label>
+                        <div class="input-group">
+                            {{ form.price(class="form-control", required=True) }}
+                            <span class="input-group-text">₽</span>
+                        </div>
+                        <div class="invalid-feedback">Пожалуйста, введите цену</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="category_id" class="form-label">
+                            <i class="bi bi-grid me-1"></i>
+                            Категория Авито
+                        </label>
+                        <select class="form-select" id="category_id" name="category_id" required>
+                            <option value="">Выберите категорию</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}" data-avito-id="{{ category.avito_id }}">
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">Пожалуйста, выберите категорию</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="address" class="form-label">
+                            <i class="bi bi-geo-alt me-1"></i>
+                            Адрес
+                        </label>
+                        {{ form.address(class="form-control", required=True) }}
+                        <div class="invalid-feedback">Пожалуйста, введите адрес</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="manager_name" class="form-label">
+                            <i class="bi bi-person me-1"></i>
+                            Имя менеджера
+                        </label>
+                        {{ form.manager_name(class="form-control", required=True) }}
+                        <div class="invalid-feedback">Пожалуйста, введите имя менеджера</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">
+                            <i class="bi bi-telephone me-1"></i>
+                            Телефон
+                        </label>
+                        {{ form.phone(class="form-control", required=True) }}
+                        <div class="invalid-feedback">Пожалуйста, введите телефон</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="photos" class="form-label">
+                            <i class="bi bi-image me-1"></i>
+                            Фотографии
+                        </label>
+                        {{ form.photos(class="form-control", multiple=True) }}
+                        <div class="form-text">Можно загрузить несколько фотографий</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_date" class="form-label">
+                                <i class="bi bi-calendar-event me-1"></i>
+                                Дата начала
+                            </label>
+                            {{ form.start_date(class="form-control", type="date", required=True) }}
+                            <div class="invalid-feedback">Пожалуйста, выберите дату начала</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_date" class="form-label">
+                                <i class="bi bi-calendar-x me-1"></i>
+                                Дата окончания
+                            </label>
+                            {{ form.end_date(class="form-control", type="date", required=True) }}
+                            <div class="invalid-feedback">Пожалуйста, выберите дату окончания</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reposts_per_day" class="form-label">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Количество публикаций в день
+                        </label>
+                        <div class="input-group">
+                            {{ form.reposts_per_day(class="form-control", type="number", min="1", max="24", required=True) }}
+                            <span class="input-group-text">раз</span>
+                        </div>
+                        <div class="form-text">Максимум 24 раза в день</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-clock me-1"></i>
+                            Время публикации
+                        </label>
+                        <div id="time-slots" class="mb-2">
+                            <!-- Здесь будут динамически добавляться поля времени -->
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="add-time-slot">
+                            <i class="bi bi-plus-circle me-1"></i>
+                            Добавить время
+                        </button>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form.is_active(class="form-check-input") }}
+                        <label class="form-check-label" for="is_active">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Активно
+                        </label>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i>
+                            Сохранить
+                        </button>
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i>
+                            Назад
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Валидация формы
+    var forms = document.querySelectorAll('.needs-validation');
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+
+    // Управление временными слотами
+    const timeSlotsContainer = document.getElementById('time-slots');
+    const addTimeSlotButton = document.getElementById('add-time-slot');
+    let timeSlotCount = 0;
+
+    function addTimeSlot() {
+        if (timeSlotCount >= 24) {
+            alert('Максимальное количество временных слотов - 24');
+            return;
+        }
+
+        const timeSlotDiv = document.createElement('div');
+        timeSlotDiv.className = 'input-group mb-2';
+        timeSlotDiv.innerHTML = `
+            <input type="time" class="form-control" name="time_slots[]" required>
+            <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove(); timeSlotCount--;">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        timeSlotsContainer.appendChild(timeSlotDiv);
+        timeSlotCount++;
+    }
+
+    addTimeSlotButton.addEventListener('click', addTimeSlot);
+
+    // Добавляем первый временной слот по умолчанию
+    addTimeSlot();
+});
+</script>
+{% endblock %} 

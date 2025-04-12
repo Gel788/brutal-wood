@@ -10,6 +10,8 @@ from models import db, Category, Advertisement
 from forms import AdvertisementForm
 from utils import allowed_file, save_photo, delete_photo, init_categories
 from flask_login import login_required, current_user
+from flask_login import LoginManager, UserMixin, login_user, logout_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -36,6 +38,8 @@ def create_app():
     # Инициализация расширений
     db.init_app(app)
     csrf = CSRFProtect(app)
+    login_manager = LoginManager(app)
+    login_manager.login_view = 'login'
 
     with app.app_context():
         # Создаем директорию для загрузок
@@ -50,10 +54,46 @@ def create_app():
 # Создание приложения
 app = create_app()
 
+# Модели
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+    advertisements = db.relationship('Advertisement', backref='user', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+class Category(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    advertisements = db.relationship('Advertisement', backref='category', lazy=True)
+
+class Advertisement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    photos = db.Column(db.JSON, default=list)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
+    phone = db.Column(db.String(20))
+    address = db.Column(db.String(200))
+    time_slots = db.Column(db.String(200))
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 @app.route('/')
 def index():
     try:
-        advertisements = Advertisement.query.order_by(Advertisement.created_at.desc()).all()
+        advertisements = Advertisement.query.filter_by(is_active=True).order_by(Advertisement.created_at.desc()).all()
         return render_template('index.html', advertisements=advertisements)
     except Exception as e:
         logger.error(f"Ошибка при получении объявлений: {str(e)}")
@@ -61,6 +101,7 @@ def index():
         return render_template('index.html', advertisements=[])
 
 @app.route('/add', methods=['GET', 'POST'])
+@login_required
 def add_advertisement():
     form = AdvertisementForm()
     if form.validate_on_submit():
@@ -89,7 +130,8 @@ def add_advertisement():
                 end_date=form.end_date.data,
                 reposts_per_day=form.reposts_per_day.data,
                 category_id=form.category_id.data,
-                time_slots=form.time_slots.data
+                time_slots=form.time_slots.data,
+                user_id=current_user.id
             )
             
             db.session.add(ad)
@@ -141,6 +183,7 @@ def edit_advertisement(ad_id):
     return render_template('edit_advertisement.html', form=form, ad=ad)
 
 @app.route('/delete/<int:id>', methods=['POST'])
+@login_required
 def delete_advertisement(id):
     try:
         ad = Advertisement.query.get_or_404(id)
@@ -164,6 +207,7 @@ def delete_advertisement(id):
     return redirect(url_for('index'))
 
 @app.route('/toggle/<int:id>', methods=['POST'])
+@login_required
 def toggle_advertisement(id):
     try:
         ad = Advertisement.query.get_or_404(id)
@@ -230,6 +274,16 @@ def delete_photo(photo_path):
         db.session.rollback()
         app.logger.error(f'Ошибка при удалении фотографии: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# Обработчики ошибок
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

@@ -37,4 +37,10 @@ AddType image/gif .gif
     ExpiresByType image/png "access plus 1 year"
     ExpiresByType text/css "access plus 1 month"
     ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+
+# Настройка прокси для Gunicorn
+<IfModule mod_proxy.c>
+    ProxyPass / http://localhost:8000/
+    ProxyPassReverse / http://localhost:8000/
 </IfModule> 

@@ -6,66 +6,72 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 from flask import current_app
 import logging
+import uuid
+from models import db, Category
 
 logger = logging.getLogger(__name__)
 
-def allowed_file(filename):
-    """Проверяет, разрешен ли тип файла"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
-
-def save_photo(file):
-    """Сохраняет загруженную фотографию и возвращает имя файла"""
+def allowed_file(filename, allowed_extensions):
+    """Проверка разрешенных расширений файлов"""
     try:
-        if not file or not allowed_file(file.filename):
-            raise ValueError('Недопустимый тип файла')
-        
-        filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{filename}"
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        
-        # Проверяем размер файла
-        file.seek(0, os.SEEK_END)
-        file_size = file.tell()
-        file.seek(0)
-        if file_size > 5 * 1024 * 1024:  # 5MB max
-            raise ValueError('Файл слишком большой')
-        
-        # Сохраняем файл
-        file.save(filepath)
-        
-        # Оптимизируем изображение
-        try:
-            with Image.open(filepath) as img:
-                if img.size[0] > 1200 or img.size[1] > 1200:
-                    img.thumbnail((1200, 1200))
-                    img.save(filepath, optimize=True, quality=85)
-        except Exception as e:
-            logger.warning(f"Не удалось оптимизировать изображение {filename}: {str(e)}")
-        
-        return filename
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
     except Exception as e:
-        logger.error(f"Ошибка при сохранении фотографии: {str(e)}")
-        raise
+        logger.error(f"Ошибка при проверке расширения файла: {str(e)}")
+        return False
 
-def delete_photo(filename):
-    """Удаляет фотографию из файловой системы"""
+def save_photo(file, upload_folder):
+    """Сохранение фотографии"""
+    try:
+        if not file or not file.filename:
+            logger.warning("Попытка сохранить пустой файл")
+            return None
+            
+        if not allowed_file(file.filename, {'png', 'jpg', 'jpeg', 'gif'}):
+            logger.warning(f"Недопустимое расширение файла: {file.filename}")
+            return None
+            
+        filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4().hex}_{filename}"
+        file_path = os.path.join(upload_folder, unique_filename)
+        
+        # Создаем директорию, если она не существует
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        file.save(file_path)
+        logger.info(f"Файл успешно сохранен: {unique_filename}")
+        return unique_filename
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении файла: {str(e)}")
+        return None
+
+def delete_photo(filename, upload_folder):
+    """Удаление фотографии"""
     try:
         if not filename:
-            return
-        
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        if os.path.exists(filepath):
-            os.remove(filepath)
+            logger.warning("Попытка удалить файл с пустым именем")
+            return False
+            
+        file_path = os.path.join(upload_folder, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            logger.info(f"Файл успешно удален: {filename}")
+            return True
+        else:
+            logger.warning(f"Файл не найден: {filename}")
+            return False
     except Exception as e:
-        logger.error(f"Ошибка при удалении фотографии: {str(e)}")
-        raise
+        logger.error(f"Ошибка при удалении файла {filename}: {str(e)}")
+        return False
 
 def init_categories():
-    """Инициализирует базовые категории"""
+    """Инициализация категорий"""
     try:
-        from models import Category, db
-        
+        # Проверяем, есть ли уже категории
+        if Category.query.first() is not None:
+            logger.info("Категории уже инициализированы")
+            return
+            
+        # Создаем базовые категории
         categories = [
             'Недвижимость',
             'Транспорт',
@@ -73,20 +79,19 @@ def init_categories():
             'Услуги',
             'Личные вещи',
             'Для дома и дачи',
-            'Бытовая техника',
-            'Электроника',
-            'Хобби и отдых',
-            'Животные'
+            'Бытовая электроника',
+            'Хобби и отдых'
         ]
         
         for name in categories:
-            if not Category.query.filter_by(name=name).first():
-                category = Category(name=name)
-                db.session.add(category)
-        
+            category = Category(name=name)
+            db.session.add(category)
+            
         db.session.commit()
+        logger.info("Категории успешно инициализированы")
     except Exception as e:
         logger.error(f"Ошибка при инициализации категорий: {str(e)}")
+        db.session.rollback()
         raise
 
 def validate_time_slots(time_slots):
@@ -111,9 +116,9 @@ def save_photos(files):
     
     saved_files = []
     for file in files:
-        if file and allowed_file(file.filename):
+        if file and allowed_file(file.filename, {'png', 'jpg', 'jpeg', 'gif'}):
             try:
-                filename = save_photo(file)
+                filename = save_photo(file, current_app.config['UPLOAD_FOLDER'])
                 saved_files.append(filename)
             except Exception as e:
                 logger.error(f"Ошибка при сохранении фотографии: {str(e)}")
@@ -128,7 +133,7 @@ def delete_photos(photos):
     
     for photo in photos:
         try:
-            delete_photo(photo)
+            delete_photo(photo, current_app.config['UPLOAD_FOLDER'])
         except Exception as e:
             logger.error(f"Ошибка при удалении фотографии {photo}: {str(e)}")
             continue

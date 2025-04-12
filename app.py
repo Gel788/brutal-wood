@@ -33,7 +33,7 @@ app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
 # Инициализация расширений
-db = SQLAlchemy(app)
+db = SQLAlchemy()
 csrf = CSRFProtect(app)
 
 # Создание директории для загрузок
@@ -55,7 +55,7 @@ def init_app():
 def index():
     """Главная страница"""
     try:
-        advertisements = Advertisement.query.order_by(Advertisement.created_at.desc()).all()
+        advertisements = Advertisement.query.filter_by(is_active=True).order_by(Advertisement.created_at.desc()).all()
         return render_template('index.html', advertisements=advertisements)
     except Exception as e:
         logger.error(f"Ошибка при получении объявлений: {str(e)}\n{traceback.format_exc()}")
@@ -71,8 +71,9 @@ def add_advertisement():
             photos = []
             for photo in form.photos.data:
                 if photo:
-                    filename = save_photo(photo)
-                    photos.append(filename)
+                    filename = save_photo(photo, app.config['UPLOAD_FOLDER'])
+                    if filename:
+                        photos.append(filename)
             
             advertisement = Advertisement(
                 title=form.title.data,
@@ -110,12 +111,13 @@ def edit_advertisement(id):
                 new_photos = []
                 for photo in form.photos.data:
                     if photo:
-                        filename = save_photo(photo)
-                        new_photos.append(filename)
+                        filename = save_photo(photo, app.config['UPLOAD_FOLDER'])
+                        if filename:
+                            new_photos.append(filename)
                 
                 # Удаление старых фотографий
                 for photo in advertisement.photos:
-                    delete_photo(photo)
+                    delete_photo(photo, app.config['UPLOAD_FOLDER'])
                 
                 advertisement.photos = new_photos
                 db.session.commit()
@@ -140,7 +142,7 @@ def delete_advertisement(id):
         try:
             # Удаление фотографий
             for photo in advertisement.photos:
-                delete_photo(photo)
+                delete_photo(photo, app.config['UPLOAD_FOLDER'])
             
             db.session.delete(advertisement)
             db.session.commit()
@@ -183,7 +185,7 @@ def uploaded_file(filename):
 def get_categories():
     """API для получения категорий"""
     try:
-        categories = Category.query.all()
+        categories = Category.query.filter_by(is_active=True).all()
         return jsonify([{'id': c.id, 'name': c.name} for c in categories])
     except Exception as e:
         logger.error(f"Ошибка при получении категорий: {str(e)}\n{traceback.format_exc()}")

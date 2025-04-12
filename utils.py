@@ -6,11 +6,93 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 from flask import current_app
 from app import app, logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 def allowed_file(filename):
-    """Проверяет, что файл имеет допустимое расширение"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+    """Проверяет, разрешен ли тип файла"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+
+def save_photo(file):
+    """Сохраняет загруженную фотографию и возвращает имя файла"""
+    try:
+        if not file or not allowed_file(file.filename):
+            raise ValueError('Недопустимый тип файла')
+        
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        
+        # Проверяем размер файла
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > 5 * 1024 * 1024:  # 5MB max
+            raise ValueError('Файл слишком большой')
+        
+        file.save(filepath)
+        return filename
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении фотографии: {str(e)}")
+        raise
+
+def delete_photo(filename):
+    """Удаляет фотографию из файловой системы"""
+    try:
+        if not filename:
+            return
+        
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except Exception as e:
+        logger.error(f"Ошибка при удалении фотографии: {str(e)}")
+        raise
+
+def init_categories():
+    """Инициализирует базовые категории"""
+    try:
+        from models import Category, db
+        
+        categories = [
+            'Недвижимость',
+            'Транспорт',
+            'Работа',
+            'Услуги',
+            'Личные вещи',
+            'Для дома и дачи',
+            'Бытовая техника',
+            'Электроника',
+            'Хобби и отдых',
+            'Животные'
+        ]
+        
+        for name in categories:
+            if not Category.query.filter_by(name=name).first():
+                category = Category(name=name)
+                db.session.add(category)
+        
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации категорий: {str(e)}")
+        raise
+
+def validate_time_slots(time_slots):
+    """Валидирует формат временных слотов"""
+    try:
+        slots = [slot.strip() for slot in time_slots.split(',')]
+        for slot in slots:
+            if not slot:
+                continue
+            hours, minutes = map(int, slot.split(':'))
+            if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+                raise ValueError('Неверный формат времени')
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при валидации временных слотов: {str(e)}")
+        return False
 
 def save_photos(files):
     """Сохраняет загруженные фотографии и возвращает список путей к ним"""

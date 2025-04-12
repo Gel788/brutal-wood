@@ -94,14 +94,10 @@ def init_categories():
         logger.error(f"Ошибка при инициализации категорий: {str(e)}")
         db.session.rollback()
 
-# Создаем контекст приложения для инициализации базы данных
+# Создаем таблицы и инициализируем категории
 with app.app_context():
-    try:
-        db.create_all()
-        init_categories()
-        logger.info("База данных успешно инициализирована")
-    except Exception as e:
-        logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
+    db.create_all()  # Создаем таблицы
+    init_categories()  # Инициализируем категории
 
 # Маршруты
 @app.route('/')

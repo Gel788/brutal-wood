@@ -34,12 +34,11 @@ app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 db.init_app(app)
 csrf = CSRFProtect(app)
 
-# Создание директории для загрузок
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
 def init_app():
     """Инициализация приложения"""
     with app.app_context():
+        # Создаем директорию для загрузок
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         # Создаем таблицы
         db.create_all()
         # Инициализируем категории
@@ -64,6 +63,12 @@ def add_advertisement():
     form = AdvertisementForm()
     if form.validate_on_submit():
         try:
+            # Проверяем существование категории
+            category = Category.query.get(form.category_id.data)
+            if not category:
+                flash('Выбранная категория не существует', 'danger')
+                return render_template('create_advertisement.html', form=form)
+
             photos = []
             for file in request.files.getlist('photos'):
                 if file and allowed_file(file.filename):
@@ -102,6 +107,12 @@ def edit_advertisement(id):
     
     if form.validate_on_submit():
         try:
+            # Проверяем существование категории
+            category = Category.query.get(form.category_id.data)
+            if not category:
+                flash('Выбранная категория не существует', 'danger')
+                return render_template('create_advertisement.html', form=form, ad=ad)
+
             ad.title = form.title.data
             ad.description = form.description.data
             ad.price = form.price.data
@@ -115,10 +126,18 @@ def edit_advertisement(id):
             ad.time_slots = form.time_slots.data
             
             # Обработка новых фотографий
+            new_photos = []
             for file in request.files.getlist('photos'):
                 if file and allowed_file(file.filename):
                     filename = save_photo(file)
-                    ad.photos.append(filename)
+                    new_photos.append(filename)
+            
+            # Обновляем список фотографий
+            if new_photos:
+                # Удаляем старые фотографии
+                for photo in ad.photos:
+                    delete_photo(photo)
+                ad.photos = new_photos
             
             db.session.commit()
             flash('Объявление успешно обновлено!', 'success')
@@ -168,10 +187,21 @@ def toggle_advertisement(id):
 def get_categories():
     try:
         categories = Category.query.all()
+        if not categories:
+            logger.warning("Список категорий пуст")
+            return jsonify([]), 200
         return jsonify([{'id': c.id, 'name': c.name} for c in categories])
     except Exception as e:
         logger.error(f"Ошибка при получении категорий: {str(e)}")
-        return jsonify([]), 500
+        return jsonify({'error': 'Произошла ошибка при получении категорий'}), 500
+
+@app.route('/static/uploads/<filename>')
+def uploaded_file(filename):
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке файла {filename}: {str(e)}")
+        return '', 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

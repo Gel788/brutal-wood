@@ -120,7 +120,7 @@
                                     Удалить
                                 </button>
                             </form>
-                            <form action="{{ url_for('toggle_ad', id=ad.id) }}" method="post" class="d-inline">
+                            <form action="{{ url_for('toggle_advertisement', id=ad.id) }}" method="post" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-{{ 'outline-secondary' if ad.is_active else 'outline-success' }}">
                                     <i class="bi bi-{{ 'pause' if ad.is_active else 'play' }} me-1"></i>

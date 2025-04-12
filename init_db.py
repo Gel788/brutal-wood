@@ -28,5 +28,12 @@ def init_categories():
         db.session.commit()
         print("Категории успешно инициализированы")
 
+def init_database():
+    with app.app_context():
+        db.drop_all()  # Удаляем все таблицы
+        db.create_all()  # Создаем таблицы заново
+        init_categories()  # Инициализируем категории
+        print("База данных успешно инициализирована!")
+
 if __name__ == '__main__':
-    init_categories() 
+    init_database() 

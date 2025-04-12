@@ -86,12 +86,6 @@ def init_categories():
     
     db.session.commit()
 
-# Создаем таблицы и инициализируем категории
-with app.app_context():
-    db.drop_all()  # Удаляем все таблицы
-    db.create_all()  # Создаем таблицы заново
-    init_categories()  # Инициализируем категории
-
 # Маршруты
 @app.route('/')
 def index():
@@ -270,4 +264,5 @@ class AdvertisementForm(FlaskForm):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        init_categories()
     app.run(debug=True) 

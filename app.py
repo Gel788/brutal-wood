@@ -13,10 +13,10 @@ from wtforms import StringField, TextAreaField, FloatField, FileField, DateField
 from wtforms.validators import DataRequired, Length, NumberRange, Email, Optional
 from flask_wtf.file import FileAllowed
 import logging
-from init_db import init_database
-import json
-import random
-from models import Category, Advertisement
+from models import db, Category, Advertisement
+
+# Загрузка переменных окружения
+load_dotenv()
 
 # Настройка логирования
 logging.basicConfig(
@@ -25,9 +25,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
 app = Flask(__name__)
+
+# Конфигурация для production
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///advertisements.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -35,20 +35,24 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
+# Инициализация расширений
+db.init_app(app)
 csrf = CSRFProtect(app)
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
 
-# Создаем таблицы и инициализируем категории
-with app.app_context():
-    init_database(drop_existing=False)  # Создаем таблицы без удаления существующих
-    init_categories()
+# Создание директории для загрузок
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-@app.before_first_request
-def create_tables():
+def init_app():
+    """Инициализация приложения"""
     with app.app_context():
+        # Создаем таблицы
         db.create_all()
+        # Инициализируем категории
         init_categories()
+    return app
+
+# Инициализация приложения
+app = init_app()
 
 # Маршруты
 @app.route('/')

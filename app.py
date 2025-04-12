@@ -20,22 +20,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+def create_app():
+    """Создание и настройка приложения"""
+    app = Flask(__name__)
+    
+    # Конфигурация для production
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///advertisements.db')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+    app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Конфигурация для production
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///advertisements.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+    # Инициализация расширений
+    db.init_app(app)
+    csrf = CSRFProtect(app)
 
-# Инициализация расширений
-db.init_app(app)
-csrf = CSRFProtect(app)
-
-def init_app():
-    """Инициализация приложения"""
     with app.app_context():
         # Создаем директорию для загрузок
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -43,10 +43,11 @@ def init_app():
         db.create_all()
         # Инициализируем категории
         init_categories()
+
     return app
 
-# Инициализация приложения
-app = init_app()
+# Создание приложения
+app = create_app()
 
 @app.route('/')
 def index():
@@ -113,6 +114,7 @@ def edit_advertisement(id):
                 flash('Выбранная категория не существует', 'danger')
                 return render_template('create_advertisement.html', form=form, ad=ad)
 
+            # Обновляем основные данные
             ad.title = form.title.data
             ad.description = form.description.data
             ad.price = form.price.data
@@ -132,11 +134,14 @@ def edit_advertisement(id):
                     filename = save_photo(file)
                     new_photos.append(filename)
             
-            # Обновляем список фотографий
+            # Обновляем список фотографий только если есть новые
             if new_photos:
                 # Удаляем старые фотографии
                 for photo in ad.photos:
-                    delete_photo(photo)
+                    try:
+                        delete_photo(photo)
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить старую фотографию {photo}: {str(e)}")
                 ad.photos = new_photos
             
             db.session.commit()
@@ -156,7 +161,11 @@ def delete_advertisement(id):
         
         # Удаление фотографий
         for photo in ad.photos:
-            delete_photo(photo)
+            try:
+                delete_photo(photo)
+            except Exception as e:
+                logger.warning(f"Не удалось удалить фотографию {photo}: {str(e)}")
+                # Продолжаем удаление даже если не удалось удалить фотографию
         
         db.session.delete(ad)
         db.session.commit()
@@ -198,6 +207,17 @@ def get_categories():
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
     try:
+        # Проверяем безопасность имени файла
+        if not allowed_file(filename):
+            logger.warning(f"Попытка доступа к недопустимому файлу: {filename}")
+            return '', 403
+            
+        # Проверяем существование файла
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(file_path):
+            logger.warning(f"Файл не найден: {filename}")
+            return '', 404
+            
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
     except Exception as e:
         logger.error(f"Ошибка при загрузке файла {filename}: {str(e)}")

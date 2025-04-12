@@ -96,8 +96,12 @@ def init_categories():
 
 # Создаем таблицы и инициализируем категории
 with app.app_context():
-    db.create_all()  # Создаем таблицы
-    init_categories()  # Инициализируем категории
+    try:
+        db.create_all()  # Создаем таблицы
+        init_categories()  # Инициализируем категории
+        logger.info("База данных успешно инициализирована")
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
 
 # Маршруты
 @app.route('/')

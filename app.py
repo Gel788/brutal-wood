@@ -13,6 +13,7 @@ from wtforms import StringField, TextAreaField, FloatField, FileField, DateField
 from wtforms.validators import DataRequired, Length, NumberRange, Email, Optional
 from flask_wtf.file import FileAllowed
 import logging
+from init_db import init_database
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -99,12 +100,7 @@ def init_categories():
 
 # Создаем таблицы и инициализируем категории
 with app.app_context():
-    try:
-        db.create_all()  # Создаем таблицы
-        init_categories()  # Инициализируем категории
-        logger.info("База данных успешно инициализирована")
-    except Exception as e:
-        logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
+    init_database(drop_existing=False)  # Создаем таблицы без удаления существующих
 
 # Маршруты
 @app.route('/')
